@@ -1,0 +1,27 @@
+---
+title: "Descriptive statistics"
+author: "Denis Matrov"
+format: html
+editor: visual
+---
+
+## Libraries
+
+```{r load-libraries}
+#| echo: FALSE
+#| include: FALSE
+library(here)
+library(tidyverse)
+library(Hmisc)
+library(data.table)
+getRs('reptools.r')
+```
+
+## Load data
+
+```{r load-data}
+
+df <- readRDS(here("data", "eliktu_vanemad.rds"))
+
+htmlView(Hmisc::describe(df))
+```

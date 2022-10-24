@@ -37,3 +37,14 @@ vignettes/*.pdf
 
 # R Environment Variables
 .Renviron
+
+# Data and figure folders
+/figure
+/data
+/raw_data
+/Reports/Descriptive_files
+/Reports/missingness_files
+
+# html, pdf
+*.html
+*.pdf
