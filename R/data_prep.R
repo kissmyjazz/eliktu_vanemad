@@ -44,4 +44,8 @@ df_smoking <- df |> dplyr::filter(is.na(smoking))
 # strange high values for vitamins for 1647isa
 df_vita <- df |> dplyr::filter(VitB1 > 10)
 
-# saveRDS(df, here("data", "eliktu_vanemad.rds"), compress='xz')
+# remove duplicate covariates expressing quantities in percents
+
+df <- df |> dplyr::select(-c(carb:carbtotal, alcohol, salteq, SFA:PUFA, SFA_g:PUFA_g))
+
+saveRDS(df, here("data", "eliktu_vanemad.rds"), compress='xz')

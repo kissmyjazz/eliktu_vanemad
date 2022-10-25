@@ -13,7 +13,6 @@ editor: visual
 library(here)
 library(tidyverse)
 library(Hmisc)
-library(data.table)
 getRs('reptools.r')
 ```
 
