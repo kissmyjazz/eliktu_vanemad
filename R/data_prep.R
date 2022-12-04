@@ -46,6 +46,6 @@ df_vita <- df |> dplyr::filter(VitB1 > 10)
 
 # remove duplicate covariates expressing quantities in percents
 
-df <- df |> dplyr::select(-c(carb:carbtotal, alcohol, salteq, SFA:PUFA, SFA_g:PUFA_g))
+df <- df |> dplyr::select(-c(carb:carbtotal, alcohol, salteq, SFA:PUFA, SFA_g:PUFA_g, weight))
 
-saveRDS(df, here("data", "eliktu_vanemad.rds"), compress='xz')
+# saveRDS(df, here("data", "eliktu_vanemad.rds"), compress='xz')

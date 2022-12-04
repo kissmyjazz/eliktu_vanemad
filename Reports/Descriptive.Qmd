@@ -3,6 +3,31 @@ title: "Descriptive statistics"
 author: "Denis Matrov"
 format: html
 editor: visual
+knitr:
+  opts_chunk: 
+    cache : true
+    cache.comments: false
+    cache.lazy: false
+    collapse: true
+    warning: false
+    message: false
+    echo: false
+    strip.white: true
+    comment: "#>"
+    fig.path: "../figures/"
+    results: "asis"
+    tidy: "styler"
+    dev: "pdf"
+    dev.args: list(pdf = list(colormodel = 'cmyk'), 
+                  tiff = list(compression = 'lzw'))
+    dpi: 600
+    fig.width: 8
+    fig.height: 8
+    concordance: true
+    global.par: true
+    R.options:
+      scipen: 999
+      huxtable.long_minus: true
 ---
 
 ## Libraries
@@ -23,4 +48,12 @@ getRs('reptools.r')
 df <- readRDS(here("data", "eliktu_vanemad.rds"))
 
 htmlView(Hmisc::describe(df))
+```
+
+## Accelerometer
+
+```{r accel}
+df_a <- readRDS(here("data", "eliktu_accel.rds"))
+
+htmlView(Hmisc::describe(df_a[, -c(1:2)]))
 ```

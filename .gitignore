@@ -44,7 +44,11 @@ vignettes/*.pdf
 /raw_data
 /Reports/Descriptive_files
 /Reports/missingness_files
+/Reports/Variables_files
+/Reports/figure
 
-# html, pdf
+
+# html, pdf, excel
 *.html
 *.pdf
+*.xlsx

@@ -3,6 +3,31 @@ title: "Variable interrelationships"
 author: "Denis Matrov"
 format: html
 editor: visual
+knitr:
+  opts_chunk: 
+    cache : true
+    cache.comments: false
+    cache.lazy: false
+    collapse: true
+    warning: false
+    message: false
+    echo: false
+    strip.white: true
+    comment: "#>"
+    fig.path: "../figures/"
+    results: "asis"
+    tidy: "styler"
+    dev: "pdf"
+    dev.args: list(pdf = list(colormodel = 'cmyk'), 
+                  tiff = list(compression = 'lzw'))
+    dpi: 600
+    fig.width: 8
+    fig.height: 8
+    concordance: true
+    global.par: true
+    R.options:
+      scipen: 999
+      huxtable.long_minus: true
 ---
 
 ## Libraries
@@ -13,9 +38,12 @@ editor: visual
 library(here)
 library(tidyverse)
 library(Hmisc)
+library(correlation)
+library(see)
+library(corrplot)
 getRs('reptools.r')
 
-hookaddcap()   # make knitr call a function at the end of each chunk
+# hookaddcap()   # make knitr call a function at the end of each chunk
                # to try to automatically add to list of figure
 ```
 
@@ -29,4 +57,60 @@ df_numeric <- df |> dplyr::select(-c(kood:age, teravili:vitamiin, smoking))
 
 
 vClus(df_numeric, corrmatrix = TRUE, maxlevel = 10, minprev = 0.05, label='fig-num_varclass')
+```
+
+## Correlation
+
+```{r correlation-hoeffding}
+
+# Hoeffding’s D
+cor_mat <- df_numeric |> correlation(method = "hoeffding") |> 
+  summary(redundant = TRUE)
+
+cor_mat_to_plot <- cor_mat[, -1] |> as.matrix()
+rownames(cor_mat_to_plot) <- colnames(cor_mat_to_plot)
+  
+corrplot(cor_mat_to_plot, method = 'color', order = 'hclust')
+```
+
+\
+
+```{r correlation-distance}
+
+# Distance correlation: Distance correlation measures both linear and non-linear association between two random variables or random vectors. This is in contrast to Pearson's correlation, which can only detect linear association between two random variables.
+
+cor_mat_d <- df_numeric |> correlation(method = "distance") |> 
+  summary(redundant = TRUE)
+
+cor_mat_to_plot_d <- cor_mat_d[, -1] |> as.matrix()
+rownames(cor_mat_to_plot_d) <- colnames(cor_mat_to_plot_d)
+  
+corrplot(cor_mat_to_plot_d, method = 'color', order = 'hclust')
+```
+
+```{r correlation-partial}
+#| eval: FALSE
+
+# Distance correlation: Distance correlation measures both linear and non-linear association between two random variables or random vectors. This is in contrast to Pearson's correlation, which can only detect linear association between two random variables.
+
+cor_mat_p <- df_numeric |> correlation(method = "spearman", partial = TRUE) |> 
+  summary(redundant = TRUE)
+
+cor_mat_to_plot_p <- cor_mat_p[, -1] |> as.matrix()
+rownames(cor_mat_to_plot_p) <- colnames(cor_mat_to_plot_p)
+  
+corrplot(cor_mat_to_plot_p, method = 'color', order = 'hclust')
+
+```
+
+```{r accel}
+
+df_a <- readRDS(here("data", "eliktu_accel.rds"))
+
+# remove all percent variables
+df_a <- df_a |> dplyr::select(-dplyr::starts_with("percent_"), -c(calendar_days,
+                              axis_1_cpm, average_mvpa_per_day, step_counts_per_day, epoch, sedentary_per_day)) 
+
+
+vClus(df_a[, -c(1:2)], corrmatrix = TRUE, maxlevel = 10, minprev = 0.05)
 ```
