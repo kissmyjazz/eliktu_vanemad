@@ -106,7 +106,7 @@ aImp_xgb_rs <- tune_race_anova(
   control = control_race(verbose = TRUE, verbose_elim = TRUE)
 )
 
-# saveRDS(aImp_xgb_rs, here("models", "aImp_xgb_rs"), compress='xz')
+# saveRDS(aImp_xgb_rs, here("models", "aImp_xgb_rs.rds"), compress='xz')
 
 ```
 
@@ -133,7 +133,7 @@ mImp_xgb_rs <- tune_race_anova(
   control = control_race(verbose = TRUE, verbose_elim = TRUE)
 )
 
-# saveRDS(mImp_xgb_rs, here("models", "mImp_xgb_rs"), compress='xz')
+# saveRDS(mImp_xgb_rs, here("models", "mImp_xgb_rs.rds"), compress='xz')
 
 ```
 
