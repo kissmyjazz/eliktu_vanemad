@@ -1,0 +1,142 @@
+---
+title: "Lasso penalised regression"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 8, fig.height = 5)
+```
+
+
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+library(here)
+library(finetune)
+library(vip)
+
+# load data and join impulsivity data to nutrition
+df <- readRDS(here("data", "eliktu_amis_nutr.rds"))
+
+# Further variable exclusion
+df_reduced <- df |> dplyr::select(-kohort, -(teravili:vitamiin), -smoking, -kood,
+                                  -sugartotal, -kcalday, -cholest)
+```
+
+
+## Build models
+
+
+```{r}
+set.seed(123)
+df_reduced_split <- initial_split(df_reduced, strata = sugu)
+df_reduced_train <- training(df_reduced_split)
+df_reduced_test <- testing(df_reduced_split)
+
+set.seed(234)
+office_boot <- bootstraps(df_reduced_train, strata = sugu)
+```
+
+Tune lasso lambda parameter on bootstrapped samples
+
+```{r model-spec}
+set.seed(1234)
+
+tune_spec <- linear_reg(penalty = tune(), mixture = 1) %>%
+  set_engine("glmnet")
+
+lambda_grid <- grid_regular(penalty(), levels = 50)
+```
+
+```{r recipes}
+rec_mImp <- recipe(mImp ~ .,
+    data = df_reduced_train
+  ) |> step_dummy(all_nominal_predictors()) |>
+  step_interact(terms = ~ starts_with("sugu"):everything()) |> 
+  step_select(-sugu_female_x_mImp) |> 
+  step_impute_knn(all_predictors()) |> step_zv() |> step_nzv() |> 
+  step_lincomb(all_numeric_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+
+# rec_mImp |> prep() |> bake(new_data = NULL) |> colnames()
+
+rec_aImp <- recipe(aImp ~ .,
+    data = df_reduced_train
+  ) |> step_dummy(all_nominal_predictors()) |>
+  step_interact(terms = ~ starts_with("sugu"):everything()) |> 
+  step_select(-sugu_female_x_aImp) |> 
+  step_impute_knn(all_predictors()) |> step_zv() |> step_nzv() |> 
+  step_lincomb(all_numeric_predictors()) |> 
+  step_normalize(all_numeric_predictors())
+
+# rec_mImp |> prep() |> bake(new_data = NULL) |> colnames()
+```
+
+```{r workflows}
+aImp_wf <- workflow(rec_aImp, tune_spec)
+mImp_wf <- workflow(rec_mImp, tune_spec)
+```
+
+```{r tune-grid}
+doParallel::registerDoParallel()
+
+set.seed(123)
+
+lasso_grid_aImp <- tune_grid(
+  aImp_wf,
+  resamples = office_boot,
+  grid = lambda_grid,
+  metrics = metric_set(rmse, rsq, mae)
+)
+
+lasso_grid_mImp <- tune_grid(
+  mImp_wf,
+  resamples = office_boot,
+  grid = lambda_grid,
+  metrics = metric_set(rmse, rsq, mae)
+)
+```
+
+```{r metrics}
+lasso_grid_aImp |> show_best("rmse")
+lasso_grid_mImp |> show_best("rmse")
+
+best_aImp <- lasso_grid_aImp |> select_best("rmse") 
+best_mImp <- lasso_grid_mImp |> select_best("rmse")
+
+```
+After tuning the penalty parameter I decided to use the value 0.4 for both mImp and aImp
+
+```{r finalise-workflows}
+lasso_last_aImp <- aImp_wf %>%
+  finalize_workflow(parameters = list(penalty = 0.4)) %>%
+  last_fit(df_reduced_split)
+
+lasso_last_mImp <- mImp_wf %>%
+  finalize_workflow(parameters = list(penalty = 0.4)) %>%
+  last_fit(df_reduced_split)
+```
+
+```{r coefs-aImp}
+extract_workflow(lasso_last_aImp) %>%
+  extract_fit_parsnip() %>% tidy() %>% 
+  dplyr::select(-penalty) %>%
+  dplyr::arrange(-abs(estimate)) %>%
+  dplyr::filter(term != "(Intercept)") %>%
+  dplyr::slice(1:20) %>%
+  gt::gt()
+
+```
+
+```{r coefs-mImp}
+extract_workflow(lasso_last_mImp) %>%
+  extract_fit_parsnip() %>% tidy() %>% 
+  dplyr::select(-penalty) %>%
+  dplyr::arrange(-abs(estimate)) %>%
+  dplyr::filter(term != "(Intercept)") %>%
+  dplyr::slice(1:20) %>%
+  gt::gt()
+
+```

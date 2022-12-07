@@ -1,0 +1,161 @@
+---
+title: "PCA/UMAP analysis"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 8, fig.height = 5)
+```
+
+
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+library(here)
+library(ggsci)
+library(embed)
+theme_set(theme_light())
+
+
+
+# load data and join impulsivity data to nutrition
+df <- readRDS(here("data", "eliktu_amis_nutr.rds"))
+
+# Further variable exclusion
+df_food <- df |> dplyr::select(-smoking, -kood,
+                               -sugartotal, -kcalday, -cholest,
+                               -(CHL:HOMA), -(teravili:vitamiin)
+                                  )
+```
+
+##PCA
+
+```{r prep-data-PCA}
+pca_rec <-recipe(~., data = df_food) %>%
+  update_role(kohort, sugu, aImp, mImp, age, BMI, new_role = "id") %>%
+  step_impute_knn(all_numeric_predictors()) %>%
+  step_normalize(all_predictors()) %>%
+  step_pca(all_predictors())
+
+pca_prep <- prep(pca_rec)
+tidied_pca <- tidy(pca_prep, 3)
+```
+
+```{r PCA-sugu}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(colour = sugu), alpha = 0.7, size = 2) +
+  labs(color = NULL) +
+  scale_color_lancet()
+```
+```{r PCA-age}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(colour = kohort), alpha = 0.7, size = 2) +
+  labs(color = NULL) +
+  scale_color_lancet()
+```
+
+```{r PCA-bmi}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(colour = BMI), alpha = 0.8, size = 1.5) +
+  labs(color = NULL) +
+  scale_colour_viridis_c()
+```
+
+```{r PCA-aImp}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(colour = aImp), alpha = 0.8, size = 1.5) +
+  labs(color = NULL) +
+  scale_colour_viridis_c()
+```
+
+```{r PCA-mImp}
+juice(pca_prep) %>%
+  ggplot(aes(PC1, PC2)) +
+  geom_point(aes(colour = mImp), alpha = 0.8, size = 1.5) +
+  labs(color = NULL) +
+  scale_colour_viridis_c()
+```
+
+```{r}
+library(tidytext)
+
+tidied_pca %>%
+  filter(component %in% paste0("PC", 1:4)) %>%
+  group_by(component) %>%
+  top_n(8, abs(value)) %>%
+  ungroup() %>%
+  mutate(terms = reorder_within(terms, abs(value), component)) %>%
+  ggplot(aes(abs(value), terms, fill = value > 0)) +
+  geom_col() +
+  facet_wrap(~component, scales = "free_y") +
+  scale_y_reordered() +
+  scale_fill_lancet() +
+  labs(
+    x = "Absolute value of contribution",
+    y = NULL, fill = "Positive?"
+  )
+```
+##UMAP
+
+```{r prep-data-UMAP}
+umap_rec <-recipe(~., data = df_food) %>%
+  update_role(kohort, sugu, aImp, mImp, age, BMI, new_role = "id") %>%
+  step_impute_knn(all_numeric_predictors()) %>%
+  step_normalize(all_predictors()) %>%
+  step_umap(all_predictors())
+
+umap_prep <- prep(umap_rec)
+```
+
+```{r UMAP-sugu}
+juice(umap_prep) %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = sugu), alpha = 0.7, size = 2) +
+  labs(color = NULL) +
+  scale_color_lancet()
+```
+
+```{r UMAP-kohort}
+juice(umap_prep) %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = kohort), alpha = 0.7, size = 2) +
+  labs(color = NULL) +
+  scale_color_lancet()
+```
+
+```{r UMAP-bmi}
+juice(umap_prep) %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = BMI), alpha = 0.8, size = 1.5) +
+  labs(color = NULL) +
+  scale_color_viridis_c()
+```
+```{r UMAP-age}
+juice(umap_prep) %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = age), alpha = 0.8, size = 1.5) +
+  labs(color = NULL) +
+  scale_color_viridis_c()
+```
+
+```{r UMAP-aImp}
+juice(umap_prep) %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = aImp), alpha = 0.8, size = 1.5) +
+  labs(color = NULL) +
+  scale_color_viridis_c()
+```
+
+```{r UMAP-mImp}
+juice(umap_prep) %>%
+  ggplot(aes(UMAP1, UMAP2)) +
+  geom_point(aes(colour = mImp), alpha = 0.8, size = 1.5) +
+  labs(color = NULL) +
+  scale_color_viridis_c()
+```

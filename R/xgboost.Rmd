@@ -1,0 +1,198 @@
+---
+title: "xgboost models"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, fig.width = 8, fig.height = 5)
+```
+
+
+
+```{r}
+library(tidymodels)
+library(tidyverse)
+library(here)
+library(finetune)
+library(vip)
+
+# load data and join impulsivity data to nutrition
+df <- readRDS(here("data", "eliktu_amis_nutr.rds"))
+
+# Further variable exclusion
+df_reduced <- df |> dplyr::select(-kohort, -(teravili:vitamiin), -smoking, -kood,
+                                  -sugartotal, -sucrose, -kcalday, -cholest,
+                                  -Milkprod, -lipid_g, -protein_g)
+```
+
+
+## Build models
+
+
+```{r}
+set.seed(123)
+df_reduced_split <- initial_split(df_reduced, strata = sugu)
+df_reduced_train <- training(df_reduced_split)
+df_reduced_test <- testing(df_reduced_split)
+
+set.seed(234)
+df_reduced_folds <- vfold_cv(df_reduced_train, strata = sugu, repeats = 5)
+df_reduced_folds
+```
+
+```{r xgboost-recipe-mImp}
+rec_xgboost_mImp <- recipe(mImp ~ .,
+    data = df_reduced_train
+  ) |> step_dummy(all_nominal_predictors(), one_hot = TRUE) |>
+  step_impute_knn(all_predictors()) |> step_zv() |> step_nzv()
+
+# rec_xgboost_mImp |> prep() |> bake(new_data = NULL)
+```
+
+```{r xgboost-recipe-aImp}
+rec_xgboost_aImp <- recipe(aImp ~ .,
+    data = df_reduced_train
+  ) |> step_dummy(all_nominal_predictors(), one_hot = TRUE) |>
+  step_impute_knn(all_predictors()) |> step_zv() |> step_nzv()
+
+# rec_xgboost_mImp |> prep() |> bake(new_data = NULL)
+```
+
+Create model spec
+
+```{r xgboost-spec}
+xgboost_spec <- boost_tree(
+    trees = tune(),
+    min_n = tune(),
+    tree_depth = tune(),
+    sample_size = tune(),
+    mtry = tune(),
+    learn_rate = 0.01,
+    loss_reduction = tune(),
+  ) |> set_mode("regression") |>
+   set_engine("xgboost")
+```
+
+Make workflows for aImp and mImp
+
+```{r workflows}
+
+aImp_wf <- workflow(rec_xgboost_aImp, xgboost_spec)
+mImp_wf <- workflow(rec_xgboost_mImp, xgboost_spec)
+```
+
+## Tune models
+
+```{r aImp-xgboost}
+doParallel::registerDoParallel()
+
+xgb_grid <- grid_latin_hypercube(
+  tree_depth(),
+  min_n(),
+  trees(),
+  loss_reduction(),
+  sample_size = sample_prop(), # needs to be a proportion
+  finalize(mtry(), df_reduced_train),
+  size = 30 # usually we would set this to a higher number
+)
+
+set.seed(345)
+aImp_xgb_rs <- tune_race_anova(
+  aImp_wf,
+  resamples = df_reduced_folds,
+  grid = xgb_grid,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_race(verbose = TRUE, verbose_elim = TRUE)
+)
+
+# saveRDS(aImp_xgb_rs, here("models", "aImp_xgb_rs"), compress='xz')
+
+```
+
+```{r plot-race}
+plot_race(aImp_xgb_rs)
+```
+
+
+```{r best-hyperparameters}
+show_best(aImp_xgb_rs, metric = "rmse")
+```
+
+
+
+```{r mImp-xgboost}
+doParallel::registerDoParallel()
+
+set.seed(345)
+mImp_xgb_rs <- tune_race_anova(
+  mImp_wf,
+  resamples = df_reduced_folds,
+  grid = xgb_grid,
+  metrics = metric_set(rmse, rsq, mae),
+  control = control_race(verbose = TRUE, verbose_elim = TRUE)
+)
+
+# saveRDS(mImp_xgb_rs, here("models", "mImp_xgb_rs"), compress='xz')
+
+```
+
+```{r plot-race-mImp}
+plot_race(mImp_xgb_rs)
+```
+
+```{r best-hyperparameters-mImp}
+show_best(mImp_xgb_rs, metric = "rmse")
+```
+
+
+```{r finalise-workflows}
+xgb_last_aImp <- aImp_wf %>%
+  finalize_workflow(select_best(aImp_xgb_rs, "rmse")) %>%
+  last_fit(df_reduced_split)
+
+xgb_last_mImp <- mImp_wf %>%
+  finalize_workflow(select_best(mImp_xgb_rs, "rmse")) %>%
+  last_fit(df_reduced_split)
+```
+
+This object contains a fitted workflow that we can use for prediction.
+
+```{r collect-predictionsd}
+pred_xgb_aImp <- collect_predictions(xgb_last_aImp)
+pred_xgb_mImp <- collect_predictions(xgb_last_mImp)
+```
+
+
+```{r aImp-preds-plot}
+pred_xgb_aImp |> ggplot(aes(x = aImp, y = .pred)) +
+  # Create a diagonal line:
+  geom_abline(lty = 2) +
+  geom_point(alpha = 0.5) +
+  labs(y = "Predicted adaptive impulsivity scores", x = 'Adaptive impulsivity scores') +
+  # Scale and size the x- and y-axis uniformly:
+  coord_obs_pred()
+```
+
+```{r mImp-preds-plot}
+pred_xgb_mImp |> ggplot(aes(x = mImp, y = .pred)) +
+  # Create a diagonal line:
+  geom_abline(lty = 2) +
+  geom_point(alpha = 0.5) +
+  labs(y = "Predicted maladaptive impulsivity scores", x = 'Maladaptive impulsivity scores') +
+  # Scale and size the x- and y-axis uniformly:
+  coord_obs_pred()
+```
+```{r vip-aImp}
+extract_workflow(xgb_last_aImp) %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "point", num_features = 15)
+
+```
+
+```{r vip-mImp}
+extract_workflow(xgb_last_mImp) %>%
+  extract_fit_parsnip() %>%
+  vip(geom = "point", num_features = 15)
+
+```

@@ -45,7 +45,19 @@ collin_aImp <- ols_coll_diag(model_aImp)
 
 
 # Added interaction with gender -------------------------------------------
+# `olsrr` functions do not work well, hence I use MASS library functionality
 model_mImp_gender <- lm(mImp ~ (.) * sugu + sugu, data = df_imp)
 
 # both directions AIC
-select_mImp_gender <- ols_step_both_aic(model_mImp_gender, progress = TRUE)
+select_mImp_gender <- MASS::stepAIC(model_mImp_gender, direction = "both",
+                                    trace = 1)
+
+summary(select_mImp_gender)
+
+model_aImp_gender <- lm(aImp ~ (.) * sugu + sugu, data = df_imp)
+
+# both directions AIC
+select_aImp_gender <- MASS::stepAIC(model_aImp_gender, direction = "both",
+                                    trace = 1)
+
+summary(select_aImp_gender)
