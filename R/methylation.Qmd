@@ -1,0 +1,52 @@
+---
+title: "Methylation"
+format: html
+editor: visual
+knitr:
+  opts_chunk: 
+    cache : true
+    cache.comments: false
+    cache.lazy: false
+    collapse: true
+    warning: false
+    message: false
+    echo: false
+    strip.white: true
+    comment: "#>"
+    fig.path: "../figures/"
+    results: "asis"
+    tidy: "styler"
+    dev: "pdf"
+    dev.args: list(pdf = list(colormodel = 'cmyk'), 
+                  tiff = list(compression = 'lzw'))
+    dpi: 600
+    fig.width: 8
+    fig.height: 8
+    concordance: true
+    global.par: true
+    R.options:
+      scipen: 999
+      huxtable.long_minus: true
+---
+
+Side project to look for relation between MAO-A methylation data and nutrition
+
+```{r load-data}
+library(tidyverse)
+library(here)
+library(skimr)
+
+df_meth <- readr::read_csv(here("raw_data", "methylation.csv"), col_types = "innn")
+
+```
+
+```{r methyl-data}
+skim(df_meth[, -1])
+
+```
+
+```{r join-data}
+
+df_m <- df_meth |> 
+  
+```
