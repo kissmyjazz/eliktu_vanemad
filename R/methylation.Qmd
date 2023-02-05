@@ -35,18 +35,137 @@ Side project to look for relation between MAO-A methylation data and nutrition
 library(tidyverse)
 library(here)
 library(skimr)
+library(correlation)
+library(GGally)
+library(lme4)
+library(lmerTest)
+library(buildmer)
+library(geepack)
 
-df_meth <- readr::read_csv(here("raw_data", "methylation.csv"), col_types = "innn")
+df_meth <- readr::read_csv(here("raw_data", "methylation.csv"), col_types = "innnf")
 
+df_eliktu <- readr::read_csv(here("raw_data", "df_lapsed.csv")) %>%
+  dplyr::filter(!rowSums(is.na(.)) >= 64) %>% 
+  dplyr::rowwise() %>% 
+  dplyr::mutate(aImp = sum(c(AMIS3, (6-AMIS7), AMIS11, AMIS15, AMIS19, AMIS23,
+                             AMIS2, (6-AMIS6), AMIS10, AMIS14, AMIS18, AMIS22)),
+                mImp = sum(c(AMIS1, AMIS5, AMIS9, AMIS13, AMIS17, (6-AMIS21),
+                             AMIS4, AMIS12, AMIS16, AMIS20, AMIS24))) %>%
+  dplyr::ungroup() %>%
+  dplyr::select(-c(AMIS1:AMIS24)) %>% 
+  dplyr::filter(!(kood == 1824 & age == 18)) %>% 
+  dplyr::filter(!(kood == 1157 & age == 33)) %>% 
+  dplyr::filter(!(kood == 1307 & age == 18)) %>%
+  dplyr::select(-c(sugu:kohort), -c(aImp:mImp), -LDL, -Wmaxkg) 
+df_meth_tall <- df_meth |> tidyr::pivot_longer(cols = c(-kood, -MAOA.uVNTR),
+                                               names_to = "age",
+                                               values_to = "CpG3.methylation",
+                                               names_prefix = "CpG3.methylation.",
+                                               names_transform = as.integer)
+
+df <- df_meth_tall |> dplyr::left_join(df_eliktu, by = c("kood", "age")) %>%
+  dplyr::filter(!rowSums(is.na(.)) >= 34)
+  
+
+rowSums(is.na(df))
+
+saveRDS(df, here("data", "eliktu_lapsed_methylation_data.rds"), compress='xz')
 ```
 
 ```{r methyl-data}
-skim(df_meth[, -1])
+skim(df_meth[, -c(1, 5)])
 
 ```
 
-```{r join-data}
+```{r correlations}
 
-df_m <- df_meth |> 
+correlation(df_meth[, -c(1, 5)])
   
+```
+
+```{r ggpairs}
+#| fig.height: 10
+
+ggpairs(df_meth[, 2:4], mapping = aes(color = df_meth$MAOA.uVNTR))
+```
+
+```{r model-prep}
+df_scaled  <- df %>% 
+  dplyr::mutate(kood = factor(kood), age_cent = (age - 18), age = NULL) %>% 
+  dplyr::mutate(across(CpG3.methylation:Alco, ~ c(scale(., scale = TRUE))))
+
+```
+
+```{r formula}
+
+fmla <- reformulate(c(names(df_scaled)[-c(1, 3)], "(1 + age_cent | kood)"), names(df_scaled)[3])
+
+
+```
+
+**Finding the maximal *feasible* model & doing stepwise elimination from it**
+
+The selected formula after the backward elimination `CpG3.methylation ~ 1 + Zink + age_cent`
+
+The criterion for variable elimination is the significance of the change in log-likelihood (`LRT`: terms which provide lower chi-square values are considered more important)
+
+`lmer` models do not converge even with only few variables, therefore `lm` was used.
+
+```{r lmer}
+m1 <- buildmer(fmla, data = df_scaled, 
+         buildmerControl = buildmerControl(direction = 'backward',
+          args = list(control = lmerControl(optimizer = 'bobyqa'))))
+
+```
+
+```{r model-summary}
+summary(m1)
+
+```
+
+Using AIC as a variable selection criterion
+
+```{r lmer2}
+fmla2 <- reformulate(c(names(df_scaled)[-c(1, 3)], "(1 | kood)"), names(df_scaled)[3])
+m2 <- buildmer(fmla2, data = df_scaled, 
+         buildmerControl = buildmerControl(direction = c('order', 'backward'),
+                                           crit = 'AIC',
+          args = list(control = lmerControl(optimizer = 'bobyqa'))))
+summary(m2)
+```
+
+glmmTMB
+
+```{summary(m3){r glmmTMB}
+
+m3 <- buildglmmTMB(fmla2, data = df_scaled, 
+         buildmerControl = buildmerControl(direction = c('order', 'backward'),
+                                           crit = 'AIC'))
+
+
+```
+
+There was no significant interaction between age and zinc.
+
+```{r age-zink}
+
+fmla3 <- as.formula("CpG3.methylation ~ Zink * age_cent")
+
+m4 <- lm(fmla3, data = df_scaled)
+summary(m4)
+```
+
+**Generalised estimating equations (GEE)**
+
+GEE estimates population average effects.
+
+```{r gee}
+
+df_scaled2 <- df_scaled |> dplyr::mutate(age_cent = age_cent + 3L)
+
+fmla4 <- formula(CpG3.methylation ~ BMI + Zink + Alco + Iron + age_cent +      Iodine + VitE + Fatsg + FruitsBerries + CHL + VitB1 + Protein +  
+    Potassium + Phosphorus + Manganese + Calcium)
+fmla4
+m5 <- geeglm(fmla4, data = na.omit(df_scaled2), id = kood, family = gaussian, corstr= "ex", scale.fix = FALSE)
+summary(m5)
 ```
