@@ -41,8 +41,9 @@ library(lme4)
 library(lmerTest)
 library(buildmer)
 library(geepack)
+library(ggstatsplot)
 
-df_meth <- readr::read_csv(here("raw_data", "methylation.csv"), col_types = "innnf")
+df_meth <- readr::read_csv(here("raw_data", "methylation.csv"), col_types = "innnff")
 
 df_eliktu <- readr::read_csv(here("raw_data", "df_lapsed.csv")) %>%
   dplyr::filter(!rowSums(is.na(.)) >= 64) %>% 
@@ -57,7 +58,7 @@ df_eliktu <- readr::read_csv(here("raw_data", "df_lapsed.csv")) %>%
   dplyr::filter(!(kood == 1157 & age == 33)) %>% 
   dplyr::filter(!(kood == 1307 & age == 18)) %>%
   dplyr::select(-c(sugu:kohort), -c(aImp:mImp), -LDL, -Wmaxkg) 
-df_meth_tall <- df_meth |> tidyr::pivot_longer(cols = c(-kood, -MAOA.uVNTR),
+df_meth_tall <- df_meth |> tidyr::pivot_longer(cols = c(-kood, -MAOA.uVNTR, -Maltreatment.18),
                                                names_to = "age",
                                                values_to = "CpG3.methylation",
                                                names_prefix = "CpG3.methylation.",
@@ -69,7 +70,8 @@ df <- df_meth_tall |> dplyr::left_join(df_eliktu, by = c("kood", "age")) %>%
 
 rowSums(is.na(df))
 
-saveRDS(df, here("data", "eliktu_lapsed_methylation_data.rds"), compress='xz')
+# saveRDS(df, here("data", "eliktu_lapsed_methylation_data.rds"), compress='xz')
+# readr::write_csv2(df, here("data", "eliktu_lapsed_methylation_data.csv"))
 ```
 
 ```{r methyl-data}
@@ -94,6 +96,7 @@ df_scaled  <- df %>%
   dplyr::mutate(kood = factor(kood), age_cent = (age - 18), age = NULL) %>% 
   dplyr::mutate(across(CpG3.methylation:Alco, ~ c(scale(., scale = TRUE))))
 
+# readr::write_csv2(df_scaled, here("data", "eliktu_lapsed_methylation_data_scaled.csv"))
 ```
 
 ```{r formula}
@@ -145,11 +148,11 @@ m3 <- buildglmmTMB(fmla2, data = df_scaled,
 
 ```
 
-There was no significant interaction between age and zinc.
+There was no significant interaction between age and zinc.Then I added MAO-A genotype and maltreatment factors.
 
 ```{r age-zink}
 
-fmla3 <- as.formula("CpG3.methylation ~ Zink * age_cent")
+fmla3 <- as.formula("CpG3.methylation ~ Zink + age_cent + Maltreatment.18 * MAOA.uVNTR")
 
 m4 <- lm(fmla3, data = df_scaled)
 summary(m4)
@@ -169,3 +172,28 @@ fmla4
 m5 <- geeglm(fmla4, data = na.omit(df_scaled2), id = kood, family = gaussian, corstr= "ex", scale.fix = FALSE)
 summary(m5)
 ```
+
+MAO-A genotype and maltreatment at age 18
+
+```{r maltr-18}
+
+df_18 <- df |> dplyr::filter(age == 18L)
+
+grouped_ggbetweenstats(
+  data             = df_18,
+  x                = Maltreatment.18,
+  y                = CpG3.methylation,
+  grouping.var     = MAOA.uVNTR,
+  outlier.tagging  = TRUE,
+  outlier.label    = kood,
+  outlier.coef     = 2,
+  ggsignif.args    = list(textsize = 4, tip_length = 0.01),
+  p.adjust.method  = "bonferroni",
+  palette          = "default_jama",
+  package          = "ggsci",
+  plotgrid.args    = list(nrow = 1),
+  annotation.args  = list(title = "Differences in CpG3 methylation by maltreatment status at age 18 for MAO-A genotypes")
+)
+
+```
+
