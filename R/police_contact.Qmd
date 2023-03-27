@@ -1,3 +1,5 @@
+------------------------------------------------------------------------
+
 ---
 title: "Methylation"
 format: html
@@ -77,7 +79,7 @@ df_meth_tall <- df_meth |> tidyr::pivot_longer(cols = c(-kood, -MAOA.uVNTR, -Mal
 
 df_33 <- df_police %>% dplyr::left_join(df_eliktu, by = c("kood", "age")) %>%
   dplyr::filter(!rowSums(is.na(.)) >= 34) %>% 
-  dplyr::mutate(age = dplyr::recode(age, `33` = 25L)) |> 
+  dplyr::mutate(age = dplyr::recode(age, `33` = 25L)) %>%
   left_join(df_meth_tall, by = c("kood", "age")) %>%
   dplyr::filter(!rowSums(is.na(.)) >= 34)
 
