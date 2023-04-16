@@ -69,7 +69,8 @@ df_eliktu <- readr::read_csv(here("raw_data", "df_lapsed.csv")) %>%
   dplyr::filter(!(kood == 1824 & age == 18)) %>% 
   dplyr::filter(!(kood == 1157 & age == 33)) %>% 
   dplyr::filter(!(kood == 1307 & age == 18)) %>%
-  dplyr::select(-c(sugu:kohort), -c(aImp:mImp), -LDL, -Wmaxkg) 
+  dplyr::select(-c(sugu:kohort), -c(aImp:mImp), -LDL, -Wmaxkg)
+  
 df_meth_tall <- df_meth |> tidyr::pivot_longer(cols = c(-kood, -MAOA.uVNTR, -Maltreatment.18),
                                                names_to = "age",
                                                values_to = "CpG3.methylation",
@@ -109,7 +110,7 @@ df_scaled  <- df %>%
   dplyr::mutate(across(CpG3.methylation:Alco, ~ c(scale(., scale = TRUE)))) %>%
   dplyr::select(-Maltreatment.18)
 
-labels <- list(age_cent = "Age, years",
+labels_scaled <- list(age_cent = "Age, years",
                Calcium = "Calcium, mg", Iodine = "Iodine, µg",
                Iron = "Iron, mg", Magnesium = "Magnesium, mg",
                Manganese = "Manganese, mg", Phosphorus = "Phosphorus, mg",
@@ -133,9 +134,33 @@ labels <- list(age_cent = "Age, years",
                Alco = "Pure alcohol, g",
                CpG3.methylation = "MAOA CpG3 methylation")
 
-labels_vec <- unlist(labels)
-var_label(df_scaled) <- labels
-var_labels(df_scaled, labels_vec)
+labels <- list(age = "Age, years",
+               Calcium = "Calcium, mg", Iodine = "Iodine, µg",
+               Iron = "Iron, mg", Magnesium = "Magnesium, mg",
+               Manganese = "Manganese, mg", Phosphorus = "Phosphorus, mg",
+               Potassium = "Potassium, mg", Selenium  = "Selenium, µg",
+               Sodium = "Sodium, mg", Zink = "Zinc, mg",
+               kcal = "Daily energy intake, kcal/day",
+               BMI = "BMI, kg/m^2",
+               Carb = "Carbohydrates, g", Cerealprod = "Cereal products, g",
+               CHL = "Cholesterol, mmol/l", Eggs = "Eggs, g",
+               Fatsg = "Fats, g", Fish = "Fish, g", Folate = "Folate, µg",
+               FruitsBerries = "Fruits & berries, g",
+               HDL = "HDL-cholesterol, mmol/l",
+               HOMA = "HOMA, units", MAOA.uVNTR = "MAOA uVNTR",
+               Lipid = "Lipids, g", Meat = "Meat, g", Milk = "Milk, g",
+               Niacin = "Niacin, mg", Protein = "Proteins, g",
+               SugSweets = "Sugar & sweets, g", Veget = "Vegetables, g",
+               VitA = "Vitamin A, µg", VitB1 = "Vitamin B1, mg",
+               VitB12 = "Vitamin B12, µg", VitB2 = "Vitamin B2, mg",
+               VitB6 = "Vitamin B6, mg", VitC = "Vitamin C, mg",
+               VitD = "Vitamin D, µg", VitE = "Vitamin E, mg",
+               Alco = "Pure alcohol, g",
+               CpG3.methylation = "MAOA CpG3 methylation")
+
+labels_vec <- unlist(labels_scaled)
+var_label(df_scaled) <- labels_scaled
+var_label(df) <- labels
 
 # readr::write_csv2(df_scaled, here("data", "eliktu_lapsed_methylation_data_scaled.csv"))
 ```
@@ -210,6 +235,8 @@ df_scaled2 <- df_scaled |> dplyr::mutate(age_cent = age_cent + 3L)
 
 fmla4 <- formula(CpG3.methylation ~ age_cent + BMI + CHL + Fatsg + Protein + FruitsBerries + Alco + Calcium + Iodine + Iron + Manganese + Phosphorus + Potassium + Zink + VitB1 + VitE)
 
+fmla4_MAOA <- formula(CpG3.methylation ~ age_cent + BMI + CHL + Fatsg + Protein + FruitsBerries + Alco + Calcium + Iodine + Iron + Manganese + Phosphorus + Potassium + Zink + VitB1 + VitE + MAOA.uVNTR)
+
 fmla4
 m5 <- geeglm(fmla4, data = na.omit(df_scaled), id = kood, family = gaussian, corstr= "ex", scale.fix = FALSE)
 summary(m5)
@@ -221,6 +248,9 @@ robust regression
 
 m2_robust <- lm_robust(fmla4, data = df_scaled, se_type = "HC2")
 summary(m2_robust)
+
+m2_robust_MAOA <- lm_robust(fmla4_MAOA, data = df_scaled, se_type = "HC2")
+summary(m2_robust_MAOA)
 ```
 
 
@@ -298,3 +328,20 @@ tab_model(list(GEE = m5, "robust LM" = m2_robust), show.intercept = FALSE,
           dv.labels = c("GEE", "robust LM"), show.ngroups = FALSE, file = fpath)
 
 ```
+
+```{r summary-table}
+paper_suppl_tbl <- df %>% select(-c(kood, Maltreatment.18)) %>% 
+  tbl_summary(by = "age", missing_text = "Missing observations") 
+paper_suppl_tbl
+
+path_doc <- here("tables", "summary_table_suppl.docx")
+ft <- paper_suppl_tbl %>% as_flex_table()
+ft <- font(ft, fontname = "Times New Roman", part = c("all"))
+ft <- fontsize(ft, size = 8)
+ft <- fontsize(ft, size = 10, part = c("header"))
+ft <- fontsize(ft, size = 10, part = c("footer"))
+ft <- line_spacing(ft, space = 1) %>% autofit() %>% fit_to_width(max_width = 11)
+save_as_docx(ft, path = path_doc)
+
+```
+
