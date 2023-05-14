@@ -35,6 +35,8 @@ Side project to look for relation between MAO-A methylation data and nutrition
 library(tidyverse)
 library(here)
 library(skimr)
+library(ggsci)
+library(ggdark)
 library(correlation)
 library(GGally)
 library(lme4)
@@ -54,6 +56,7 @@ library(lmtest)
 library(sandwich)
 library(parameters)
 library(estimatr)
+library(Cairo)
 
 df_meth <- readr::read_csv(here("raw_data", "methylation.csv"), col_types = "innnff")
 
@@ -305,21 +308,29 @@ df_tall %>% ggplot(aes(x = value, y = CpG3.methylation)) +
 
 
 ```{r coef-plot}
-theme_set(theme_minimal())
+theme_set(theme_gray())
 
 model_plot <- plot_models(list(GEE = m5, "robust LM" = m2_robust),
            title = "MAOA CpG3 methylation", vline.color = "#63c132", 
            m.labels = c("GEE", "robust LM"), p.shape = TRUE,
            show.p = TRUE, p.threshold = c(0.05, 0.01, 0.001),
-           legend.title = "Models", show.legend = FALSE,
-           show.values = TRUE, axis.labels = labels_vec,
-           spacing = 0.6, value.size = 1.8, line.size = 0.7,
-           dot.size = 2, axis.lim = c(-0.8, 1.5)) +
-  theme(panel.grid = element_blank(), text = element_text(vjust = 0.2))
+           legend.title = "Model", show.legend = TRUE,
+           show.values = FALSE, axis.labels = labels_vec,
+           spacing = 0.6, value.size = 1.8, line.size = 0.9,
+           dot.size = 3, colors = c("#E41A1C", "#6BAED6")) +
+  theme(text = element_text(vjust = 0.2, size = 14),
+        axis.line = element_line(color="black"), plot.title.position = "plot",
+        plot.title = element_text(hjust = 0.5)) + 
+  labs(y = "Regression coefficients") +
+  guides(shape = guide_legend(override.aes = list(size = 3, color = "black")))
+
+model_plot$data[["p.stars"]] <- fct_recode(model_plot$data[["p.stars"]],
+           "<0.05" = "*", "<0.01" = "**", "<0.001" = "***")
+
 model_plot
 
-fpath <- here("figures", "methylation-models-plot.jpg")
-ggsave(fpath, model_plot, dpi = 600, width = 7)
+fpath <- here("figures", "methylation-models-plot-plevels-dark-red2.eps")
+ggsave(fpath, model_plot, dpi = 600, width = 8, height = 4.5, device = "eps")
 ```
 
 ```{r model-summaries}
